@@ -3,7 +3,7 @@ import * as uuid from "uuid";
 import { Player, Cell, Game, Connection } from "./utils/type";
 import { checkGameState } from "./utils/checkGameState";
 import { renderBoard } from "./utils/utils";
-
+import { isMoveValid } from "./utils/validation";
 
 let allGames: Game[] = [];
 const connections: Connection[] = [];
@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ port: 4000 });
 wss.on("connection", (ws: WebSocket) => {
   ws.on("message", (message: Buffer) => {
     const messageString = message.toString();
-    console.log("Message ", messageString)
+    console.log("Message ", messageString);
     const [command, ...args] = messageString.split(" ");
     if (command === "register") {
       const [name] = args;
@@ -48,7 +48,7 @@ wss.on("connection", (ws: WebSocket) => {
       };
       allGames.push(game);
       ws.send(`Game created with id ${game.id}. Waiting for player 2 to join`);
-      console.log(`Game ${game.id} Created`)
+      console.log(`Game ${game.id} Created`);
     } else if (command === "join") {
       if (!allGames.length) {
         ws.send("No active game");
@@ -64,7 +64,7 @@ wss.on("connection", (ws: WebSocket) => {
       allGames[0].player1.send(renderBoard(allGames[0].board));
       allGames[0].player2?.send(renderBoard(allGames[0].board));
       allGames[0].player1.send(`Move Player 1`);
-      console.log(`Player 2 Joined ${allGames[0].id}`)
+      console.log(`Player 2 Joined ${allGames[0].id}`);
     } else if (command === "spectate") {
       if (!allGames.length) {
         ws.send("No active game to spectate");
@@ -74,32 +74,8 @@ wss.on("connection", (ws: WebSocket) => {
       ws.send("You are now a spectator");
       ws.send(renderBoard(allGames[0].board));
     } else if (command === "move") {
-      if(!allGames.length) {
-        ws.send("No active game");
-        return;
-      }
       const [row, column] = args.map(Number);
-      if (allGames[0].player1 !== ws && allGames[0].player2 !== ws) {
-        ws.send("You are not a player in this game");
-        return;
-      }
-      if (
-        (allGames[0].currentPlayer === Player.X && allGames[0].player1 !== ws) ||
-        (allGames[0].currentPlayer === Player.O && allGames[0].player2 !== ws)
-      ) {
-        ws.send("It's not your turn");
-        return;
-      }
-      if(row > 2 || column > 2) {
-        ws.send("Invalid move");
-        ws.send("Move")
-        return;
-      }
-      if (allGames[0].board[row][column] !== Cell.Empty) {
-        ws.send("Invalid move");
-        ws.send("Move")
-        return;
-      }
+      if (!isMoveValid(ws, allGames, row, column)) return;
       allGames[0].board[row][column] = Cell[allGames[0].currentPlayer];
       // Switch Current Player
       if (allGames[0].currentPlayer === Player.X) {
@@ -113,21 +89,22 @@ wss.on("connection", (ws: WebSocket) => {
         spectator.send(renderBoard(allGames[0].board));
       });
       checkGameState(allGames[0], allGames);
+      if (!allGames.length) return;
       if (allGames[0].player1 !== ws) {
-        allGames[0].player1?.send("Move Player 1")
-        allGames[0].player2?.send("Waiting for Player 1's turn")
+        allGames[0].player1?.send("Move Player 1");
+        allGames[0].player2?.send("Waiting for Player 1's turn");
       } else {
-        allGames[0].player1?.send("Waiting for Player 2's turn")
-        allGames[0].player2?.send("Move Player 2")
+        allGames[0].player1?.send("Waiting for Player 2's turn");
+        allGames[0].player2?.send("Move Player 2");
       }
-    // * For More than 1 Game
-    // } else if (command === "list") {
-    //   ws.send(
-    //     "Active games:\n" +
-    //       allGames
-    //       .map(game => `${game.id}: ${game?.player2 ? "Game in progress" : "Waiting for player 2"}`)
-    //       .join("\n")
-    //   );
+      // * For More than 1 Game
+      // } else if (command === "list") {
+      //   ws.send(
+      //     "Active games:\n" +
+      //       allGames
+      //       .map(game => `${game.id}: ${game?.player2 ? "Game in progress" : "Waiting for player 2"}`)
+      //       .join("\n")
+      //   );
     } else {
       ws.send("Invalid command");
     }
